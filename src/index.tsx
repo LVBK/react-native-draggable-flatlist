@@ -9,11 +9,11 @@ import {
   NativeScrollEvent
 } from "react-native";
 import {
-  PanGestureHandler,
   State as GestureState,
   FlatList,
   GestureHandlerGestureEventNativeEvent,
-  PanGestureHandlerEventExtra
+  LongPressGestureHandler,
+  LongPressGestureHandlerEventExtra
 } from "react-native-gesture-handler";
 import Animated from "react-native-reanimated";
 import { springFill, setupCell } from "./procs";
@@ -146,14 +146,14 @@ class DraggableFlatList<T> extends React.Component<Props<T>, State> {
 
   containerRef = React.createRef<Animated.View>();
   flatlistRef = React.createRef<AnimatedFlatListType<T>>();
-  panGestureHandlerRef = React.createRef<PanGestureHandler>();
+  longPressGestureHandlerRef = React.createRef<LongPressGestureHandler>();
 
   containerSize = new Value<number>(0);
 
   activationDistance = new Value<number>(0);
   touchAbsolute = new Value<number>(0);
   touchCellOffset = new Value<number>(0);
-  panGestureState = new Value(GestureState.UNDETERMINED);
+  longPressGestureState = new Value(GestureState.UNDETERMINED);
 
   isPressedIn = {
     native: new Value<number>(0),
@@ -651,7 +651,7 @@ class DraggableFlatList<T> extends React.Component<Props<T>, State> {
       this.isAtEdge,
       not(and(this.isAtTopEdge, this.isScrolledUp)),
       not(and(this.isAtBottomEdge, this.isScrolledDown)),
-      eq(this.panGestureState, GestureState.ACTIVE),
+      eq(this.longPressGestureState, GestureState.ACTIVE),
       not(this.isAutoscrolling.native)
     ),
     call(this.autoscrollParams, this.autoscroll)
@@ -703,17 +703,18 @@ class DraggableFlatList<T> extends React.Component<Props<T>, State> {
     )
   ];
 
-  onPanStateChange = event([
+  onLongPressStateChange = event([
     {
       nativeEvent: ({
         state,
         x,
         y
-      }: GestureHandlerGestureEventNativeEvent & PanGestureHandlerEventExtra) =>
-        cond(and(neq(state, this.panGestureState), not(this.disabled)), [
-          set(this.panGestureState, state),
+      }: GestureHandlerGestureEventNativeEvent &
+        LongPressGestureHandlerEventExtra) =>
+        cond(and(neq(state, this.longPressGestureState), not(this.disabled)), [
+          set(this.longPressGestureState, state),
           cond(
-            eq(this.panGestureState, GestureState.ACTIVE),
+            eq(this.longPressGestureState, GestureState.ACTIVE),
             set(
               this.activationDistance,
               sub(this.touchAbsolute, this.props.horizontal ? x : y)
@@ -731,13 +732,13 @@ class DraggableFlatList<T> extends React.Component<Props<T>, State> {
     }
   ]);
 
-  onPanGestureEvent = event([
+  onLongPressGestureEvent = event([
     {
-      nativeEvent: ({ x, y }: PanGestureHandlerEventExtra) =>
+      nativeEvent: ({ x, y }: LongPressGestureHandlerEventExtra) =>
         cond(
           and(
             this.isHovering,
-            eq(this.panGestureState, GestureState.ACTIVE),
+            eq(this.longPressGestureState, GestureState.ACTIVE),
             not(this.disabled)
           ),
           [
@@ -759,7 +760,7 @@ class DraggableFlatList<T> extends React.Component<Props<T>, State> {
 
   hoverComponentOpacity = and(
     this.isHovering,
-    neq(this.panGestureState, GestureState.CANCELLED)
+    neq(this.longPressGestureState, GestureState.CANCELLED)
   );
 
   renderHoverComponent = () => {
@@ -790,7 +791,6 @@ class DraggableFlatList<T> extends React.Component<Props<T>, State> {
 
   renderItem = ({ item, index }: { item: T; index: number }) => {
     const key = this.keyExtractor(item, index);
-    const { renderItem } = this.props;
     if (!this.cellData.get(key)) this.setCellData(key, index);
     const { onUnmount } = this.cellData.get(key) || {
       onUnmount: () => console.log("## error, no cellData")
@@ -800,7 +800,7 @@ class DraggableFlatList<T> extends React.Component<Props<T>, State> {
         extraData={this.props.extraData}
         itemKey={key}
         keyToIndex={this.keyToIndex}
-        renderItem={renderItem}
+        renderItem={this.props.renderItem}
         item={item}
         drag={this.drag}
         onUnmount={onUnmount}
@@ -876,11 +876,13 @@ class DraggableFlatList<T> extends React.Component<Props<T>, State> {
         : { activeOffsetY: activeOffset };
     }
     return (
-      <PanGestureHandler
-        ref={this.panGestureHandlerRef}
-        onGestureEvent={this.onPanGestureEvent}
-        onHandlerStateChange={this.onPanStateChange}
-        {...dynamicProps}
+      <LongPressGestureHandler
+        minDurationMs={700}
+        maxDist={Number.MAX_SAFE_INTEGER}
+        shouldCancelWhenOutside={false}
+        ref={this.longPressGestureHandlerRef}
+        onGestureEvent={this.onLongPressGestureEvent}
+        onHandlerStateChange={this.onLongPressStateChange}
       >
         <Animated.View
           style={styles.flex}
@@ -939,7 +941,7 @@ class DraggableFlatList<T> extends React.Component<Props<T>, State> {
           )}
           {debug && this.renderDebug()}
         </Animated.View>
-      </PanGestureHandler>
+      </LongPressGestureHandler>
     );
   }
 }
